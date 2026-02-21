@@ -431,21 +431,23 @@ class TrafficYoloApp(QMainWindow):
     def apply_dark_theme(self):
         style = """
         QMainWindow { background-color: #1e1e2e; }
-        QWidget { color: #cdd6f4; font-family: 'Segoe UI', Arial; }
-        QTabWidget::pane { border: 1px solid #45475a; border-radius: 5px; background: #181825; }
-        QTabBar::tab { background: #313244; padding: 10px 20px; border-radius: 4px; margin: 2px; }
-        QTabBar::tab:selected { background: #89b4fa; color: #11111b; font-weight: bold; }
-        QPushButton { background-color: #89b4fa; color: #11111b; border: none; padding: 10px; border-radius: 5px; font-weight: bold; }
+        QWidget { color: #cdd6f4; font-family: 'Segoe UI', Arial; font-size: 14pt; }
+        QTabWidget::pane { border: 1px solid #45475a; border-radius: 8px; background: #181825; }
+        QTabBar::tab { background: #313244; padding: 12px 24px; border-radius: 6px; margin: 2px; font-weight: bold; }
+        QTabBar::tab:selected { background: #89b4fa; color: #11111b; font-weight: bold; font-size: 15pt; }
+        QPushButton { background-color: #89b4fa; color: #11111b; border: none; padding: 14px; border-radius: 6px; font-weight: bold; font-size: 13pt; }
         QPushButton:hover { background-color: #b4befe; }
         QPushButton:disabled { background-color: #45475a; color: #a6adc8; }
-        QLineEdit, QSpinBox, QComboBox, QDoubleSpinBox { background-color: #313244; color: #cdd6f4; border: 1px solid #45475a; border-radius: 4px; padding: 5px; }
-        QTextEdit { background-color: #11111b; color: #a6e3a1; font-family: Consolas, monospace; border: 1px solid #45475a; }
-        QListWidget { background-color: #181825; border: 1px solid #45475a; border-radius: 4px; }
-        QListWidget::item:selected { background-color: #45475a; }
-        QGroupBox { border: 1px solid #45475a; border-radius: 5px; margin-top: 15px; font-weight: bold; }
-        QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; color: #89b4fa; }
-        QProgressBar { text-align: center; border: 1px solid #45475a; border-radius: 5px; }
-        QProgressBar::chunk { background-color: #a6e3a1; border-radius: 5px; }
+        QLineEdit, QSpinBox, QComboBox, QDoubleSpinBox { background-color: #313244; color: #cdd6f4; border: 1px solid #45475a; border-radius: 6px; padding: 8px; font-size: 14pt; }
+        QTextEdit { background-color: #11111b; color: #a6e3a1; font-family: Consolas, monospace; border: 1px solid #45475a; font-size: 12pt; padding: 10px; }
+        QListWidget { background-color: #181825; border: 1px solid #45475a; border-radius: 6px; font-size: 14pt; padding: 5px; }
+        QListWidget::item { padding: 8px; border-bottom: 1px solid #313244; }
+        QListWidget::item:selected { background-color: #45475a; border-radius: 4px; }
+        QGroupBox { border: 1px solid #45475a; border-radius: 8px; margin-top: 25px; font-weight: bold; font-size: 15pt; padding-top: 15px; }
+        QGroupBox::title { subcontrol-origin: margin; left: 15px; padding: 0 5px; color: #89b4fa; top: -10px; }
+        QProgressBar { text-align: center; border: 1px solid #45475a; border-radius: 6px; font-weight: bold; font-size: 12pt; height: 25px; }
+        QProgressBar::chunk { background-color: #a6e3a1; border-radius: 6px; }
+        QSplitter::handle { background-color: #45475a; }
         """
         self.setStyleSheet(style)
 
@@ -457,6 +459,7 @@ class TrafficYoloApp(QMainWindow):
         # 1. Capture Group
         grp1 = QGroupBox("Capture Streams")
         l1 = QFormLayout()
+        l1.setSpacing(15)
         self.stream_url_in = QLineEdit("http://cctvjss.jogjakota.go.id/atcs/ATCS_Lampu_Merah_SugengJeroni2.stream/playlist.m3u8")
         self.num_frames_in = QSpinBox()
         self.num_frames_in.setRange(10, 5000)
@@ -481,6 +484,7 @@ class TrafficYoloApp(QMainWindow):
         # 2. Auto-Labeling Group
         grp2 = QGroupBox("Auto-Labeling (YOLO Pre-annotate)")
         l2 = QFormLayout()
+        l2.setSpacing(15)
         self.al_model_in = QLineEdit("../yolov26n.pt")
         self.btn_autolabel = QPushButton("Start Auto-Label")
         self.btn_autolabel.clicked.connect(self.start_autolabel)
@@ -498,7 +502,9 @@ class TrafficYoloApp(QMainWindow):
         
         lay.addWidget(grp1)
         lay.addWidget(grp2)
-        lay.addWidget(QLabel("Logs:"))
+        lbl_logs = QLabel("Logs:")
+        lbl_logs.setStyleSheet("font-weight: bold; font-size: 15pt; color: #89b4fa;")
+        lay.addWidget(lbl_logs)
         lay.addWidget(self.s1_log)
         
         return w
@@ -568,21 +574,30 @@ class TrafficYoloApp(QMainWindow):
         lv.addWidget(btn_load_auto)
         
         # Class Selector
-        lv.addWidget(QLabel("<b>Classes:</b>"))
+        lbl_classes = QLabel("Classes:")
+        lbl_classes.setStyleSheet("font-weight: bold; font-size: 15pt; color: #89b4fa; margin-top: 10px;")
+        lv.addWidget(lbl_classes)
         self.class_list = QListWidget()
         for i, c in enumerate(CLASSES):
-            item = QListWidgetItem(f"{i}: {c}")
+            item = QListWidgetItem(f"{i} : {c}")
+            font = QFont()
+            font.setBold(True)
+            font.setPointSize(14)
+            item.setFont(font)
             item.setForeground(COLORS_QT[i])
             self.class_list.addItem(item)
         self.class_list.setCurrentRow(0)
         lv.addWidget(self.class_list)
         
         # Box List
-        lv.addWidget(QLabel("<b>Current Boxes:</b>"))
+        lbl_boxes = QLabel("Current Boxes:")
+        lbl_boxes.setStyleSheet("font-weight: bold; font-size: 15pt; color: #89b4fa; margin-top: 10px;")
+        lv.addWidget(lbl_boxes)
         self.box_list = QListWidget()
         lv.addWidget(self.box_list)
         
         btn_del = QPushButton("Delete Selected Box")
+        btn_del.setStyleSheet("background-color: #f38ba8; color: #11111b;")
         btn_del.clicked.connect(self.delete_selected_box)
         lv.addWidget(btn_del)
         
@@ -594,15 +609,17 @@ class TrafficYoloApp(QMainWindow):
         self.canvas = LabelCanvas(self)
         mv.addWidget(self.canvas)
         
-        # Nav layout
         nav_lay = QHBoxLayout()
-        self.btn_prev = QPushButton("<< Prev")
+        nav_lay.setSpacing(20)
+        self.btn_prev = QPushButton("◄ Prev Image (A)")
         self.btn_prev.clicked.connect(self.prev_image)
         self.lbl_img_info = QLabel("Image 0/0")
         self.lbl_img_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_img_info.setStyleSheet("font-weight: bold; font-size: 16pt; background: #313244; border-radius: 6px; padding: 10px;")
         self.btn_save = QPushButton("Save (S)")
+        self.btn_save.setStyleSheet("background-color: #a6e3a1; color: #11111b;")
         self.btn_save.clicked.connect(self.save_current_labels)
-        self.btn_next = QPushButton("Next >>")
+        self.btn_next = QPushButton("Next Image (D) ►")
         self.btn_next.clicked.connect(self.next_image)
         
         nav_lay.addWidget(self.btn_prev)
@@ -787,6 +804,7 @@ class TrafficYoloApp(QMainWindow):
         
         grp = QGroupBox("Dataset Splitting Configuration")
         fl = QFormLayout()
+        fl.setSpacing(15)
         
         self.src_dataset_in = QLineEdit(os.path.abspath("dataset_manual"))
         self.train_ratio = QDoubleSpinBox()
@@ -807,7 +825,9 @@ class TrafficYoloApp(QMainWindow):
         self.s3_log.setReadOnly(True)
         
         lay.addWidget(grp)
-        lay.addWidget(QLabel("Logs:"))
+        lbl_logs3 = QLabel("Logs:")
+        lbl_logs3.setStyleSheet("font-weight: bold; font-size: 15pt; color: #89b4fa;")
+        lay.addWidget(lbl_logs3)
         lay.addWidget(self.s3_log)
         
         return w
@@ -875,6 +895,7 @@ names:
         
         grp = QGroupBox("YOLO Training")
         fl = QFormLayout()
+        fl.setSpacing(15)
         
         self.t_yaml = QLineEdit(os.path.abspath("dataset/traffic.yaml"))
         self.t_model = QLineEdit("../yolov26n.pt")
@@ -909,7 +930,9 @@ names:
         self.s4_log.setStyleSheet("background-color: #1e1e2e; color: #a6e3a1; font-family: monospace;")
         
         lay.addWidget(grp)
-        lay.addWidget(QLabel("Terminal Output:"))
+        lbl_logs4 = QLabel("Terminal Output:")
+        lbl_logs4.setStyleSheet("font-weight: bold; font-size: 15pt; color: #89b4fa;")
+        lay.addWidget(lbl_logs4)
         lay.addWidget(self.s4_log)
         
         return w
