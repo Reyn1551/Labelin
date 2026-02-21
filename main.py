@@ -66,9 +66,24 @@ class CaptureThread(QThread):
             self.finished.emit(False, "Failed to open video stream.")
             return
 
+        # Find highest frame number currently in the output directory
+        start_idx = 0
+        existing_frames = glob.glob(os.path.join(self.output_dir, "frame_*.jpg"))
+        if existing_frames:
+            indices = []
+            for f in existing_frames:
+                try:
+                    basename = os.path.basename(f)
+                    idx = int(basename.replace("frame_", "").replace(".jpg", ""))
+                    indices.append(idx)
+                except ValueError:
+                    pass
+            if indices:
+                start_idx = max(indices) + 1
+                
         count = 0
         saved = 0
-        self.log.emit("Starting capture...")
+        self.log.emit(f"Starting capture from frame_{start_idx:04d}.jpg...")
         
         while saved < self.sb_num_frames.value():
             ret, frame = cap.read()
@@ -78,11 +93,12 @@ class CaptureThread(QThread):
             
             count += 1
             if count % self.frame_skip == 0:
-                filename = f"{self.output_dir}/frame_{saved:04d}.jpg"
+                current_frame_id = start_idx + saved
+                filename = f"{self.output_dir}/frame_{current_frame_id:04d}.jpg"
                 cv2.imwrite(filename, frame)
                 saved += 1
                 self.progress.emit(saved, self.sb_num_frames.value())
-                self.log.emit(f"Saved frame {saved}/{self.sb_num_frames.value()}")
+                self.log.emit(f"Saved frame {current_frame_id:04d} ({saved}/{self.sb_num_frames.value()})")
                 
         cap.release()
         self.finished.emit(True, f"Done! Saved {saved} frames to '{self.output_dir}'")
@@ -823,7 +839,14 @@ class TrafficYoloApp(QMainWindow):
                     lbl_name = img_name.replace('.jpg', '.txt').replace('.png', '.txt')
                     auto_lbl_src = os.path.join(os.path.dirname(img_dir), "labels", lbl_name)
                     man_tgt = os.path.join(self.dataset_manual, "labels", lbl_name)
-                    if os.path.exists(auto_lbl_src) and not os.path.exists(man_tgt):
+                    # Copy if manual target doesn't exist, OR if it exists but is completely empty (0 bytes)
+                    should_copy = False
+                    if not os.path.exists(man_tgt):
+                        should_copy = True
+                    elif os.path.getsize(man_tgt) == 0:
+                        should_copy = True
+                        
+                    if os.path.exists(auto_lbl_src) and should_copy:
                         shutil.copy(auto_lbl_src, man_tgt)
                         
         self.load_current_image()
@@ -844,10 +867,10 @@ class TrafficYoloApp(QMainWindow):
         base_name = os.path.basename(img_path)
         label_name = base_name.replace('.jpg','.txt').replace('.png','.txt')
         
-        # Check manual output first
+        # Check manual output first, but ensure it is not an empty saved state
         manual_txt = os.path.join(self.dataset_manual, "labels", label_name)
         
-        if os.path.exists(manual_txt):
+        if os.path.exists(manual_txt) and os.path.getsize(manual_txt) > 0:
             self.render_labels(manual_txt)
         elif self.is_loading_autolabeled:
             # check the autolabeled txt
