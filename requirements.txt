@@ -1,0 +1,11 @@
+# Labelin - Traffic object detection suite
+# Python 3.10+
+
+# GUI
+PyQt6>=6.4.0
+
+# Image & video I/O, processing
+opencv-python>=4.8.0
+
+# YOLO detection & training (optional but recommended for full workflow)
+ultralytics>=8.0.0
