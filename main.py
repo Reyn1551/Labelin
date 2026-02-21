@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
     QListWidget, QGraphicsView, QGraphicsScene, QGraphicsRectItem,
     QGraphicsPixmapItem, QMessageBox, QFileDialog, QFormLayout, 
     QSpinBox, QDoubleSpinBox, QComboBox, QTextEdit, QProgressBar, 
-    QGroupBox, QListWidgetItem, QGraphicsTextItem, QScrollArea
+    QGroupBox, QListWidgetItem, QGraphicsTextItem, QScrollArea, QInputDialog
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QRectF, QPointF, QObject
 from PyQt6.QtGui import QPixmap, QImage, QPen, QColor, QFont, QBrush, QPainter
@@ -430,7 +430,7 @@ class TrafficYoloApp(QMainWindow):
         
     def apply_dark_theme(self):
         style = """
-        QMainWindow { background-color: #1e1e2e; }
+        QMainWindow, QDialog, QMessageBox { background-color: #1e1e2e; }
         QWidget { color: #cdd6f4; font-family: 'Segoe UI', Arial; font-size: 14pt; }
         QTabWidget::pane { border: 1px solid #45475a; border-radius: 8px; background: #181825; }
         QTabBar::tab { background: #313244; padding: 12px 24px; border-radius: 6px; margin: 2px; font-weight: bold; }
@@ -448,6 +448,8 @@ class TrafficYoloApp(QMainWindow):
         QProgressBar { text-align: center; border: 1px solid #45475a; border-radius: 6px; font-weight: bold; font-size: 12pt; height: 25px; }
         QProgressBar::chunk { background-color: #a6e3a1; border-radius: 6px; }
         QSplitter::handle { background-color: #45475a; }
+        QTreeView, QListView, QTableView { background-color: #181825; border: 1px solid #45475a; }
+        QHeaderView::section { background-color: #313244; border: 1px solid #45475a; padding: 4px; }
         """
         self.setStyleSheet(style)
 
@@ -486,12 +488,19 @@ class TrafficYoloApp(QMainWindow):
         l2 = QFormLayout()
         l2.setSpacing(15)
         self.al_model_in = QLineEdit("../yolov26n.pt")
+        btn_al_model = QPushButton("Browse")
+        btn_al_model.setStyleSheet("font-size: 11pt; padding: 5px;")
+        btn_al_model.clicked.connect(lambda: self.browse_file(self.al_model_in, "Select YOLO Model", "*.pt"))
+        h_al = QHBoxLayout()
+        h_al.addWidget(self.al_model_in)
+        h_al.addWidget(btn_al_model)
+        
         self.btn_autolabel = QPushButton("Start Auto-Label")
         self.btn_autolabel.clicked.connect(self.start_autolabel)
         
         self.al_prog = QProgressBar()
         
-        l2.addRow("YOLO Model Path (.pt):", self.al_model_in)
+        l2.addRow("YOLO Model Path (.pt):", h_al)
         l2.addRow(self.btn_autolabel)
         l2.addRow(self.al_prog)
         grp2.setLayout(l2)
@@ -576,7 +585,27 @@ class TrafficYoloApp(QMainWindow):
         # Class Selector
         lbl_classes = QLabel("Classes:")
         lbl_classes.setStyleSheet("font-weight: bold; font-size: 15pt; color: #89b4fa; margin-top: 10px;")
-        lv.addWidget(lbl_classes)
+        
+        btn_add_class = QPushButton("Add")
+        btn_add_class.setStyleSheet("background-color: #a6e3a1; color: #11111b; font-size: 11pt; padding: 5px;")
+        btn_add_class.clicked.connect(self.add_class)
+        
+        btn_edit_class = QPushButton("Edit")
+        btn_edit_class.setStyleSheet("background-color: #fab387; color: #11111b; font-size: 11pt; padding: 5px;")
+        btn_edit_class.clicked.connect(self.edit_class)
+        
+        btn_del_class = QPushButton("Del")
+        btn_del_class.setStyleSheet("background-color: #f38ba8; color: #11111b; font-size: 11pt; padding: 5px;")
+        btn_del_class.clicked.connect(self.delete_class)
+        
+        ch_lay = QHBoxLayout()
+        ch_lay.addWidget(lbl_classes)
+        ch_lay.addWidget(btn_add_class)
+        ch_lay.addWidget(btn_edit_class)
+        ch_lay.addWidget(btn_del_class)
+        
+        lv.addLayout(ch_lay)
+        
         self.class_list = QListWidget()
         for i, c in enumerate(CLASSES):
             item = QListWidgetItem(f"{i} : {c}")
@@ -633,6 +662,131 @@ class TrafficYoloApp(QMainWindow):
         split.setSizes([200, 800])
         lay.addWidget(split)
         return w
+
+    def browse_file(self, line_edit, title, filter_str="All Files (*)"):
+        path, _ = QFileDialog.getOpenFileName(self, title, "", filter_str, options=QFileDialog.Option.DontUseNativeDialog)
+        if path:
+            line_edit.setText(path)
+            
+    def browse_dir(self, line_edit, title):
+        path = QFileDialog.getExistingDirectory(self, title, options=QFileDialog.Option.DontUseNativeDialog)
+        if path:
+            line_edit.setText(path)
+
+    def _sync_classes_file(self):
+        with open("classes.txt", "w") as f:
+            f.write("\n".join(CLASSES))
+            
+    def _refresh_class_list_ui(self):
+        # Refresh the class list
+        curr_row = self.class_list.currentRow()
+        self.class_list.clear()
+        
+        # Ensure we have enough colors
+        while len(COLORS_QT) < len(CLASSES):
+            COLORS_QT.append(QColor(random.randint(50, 255), random.randint(50, 255), random.randint(50, 255)))
+            
+        for i, c in enumerate(CLASSES):
+            item = QListWidgetItem(f"{i} : {c}")
+            font = QFont()
+            font.setBold(True)
+            font.setPointSize(14)
+            item.setFont(font)
+            item.setForeground(COLORS_QT[i])
+            self.class_list.addItem(item)
+            
+        if curr_row >= len(CLASSES):
+            curr_row = len(CLASSES) - 1
+        self.class_list.setCurrentRow(max(0, curr_row))
+        self.update_box_list()
+        
+    def add_class(self):
+        text, ok = QInputDialog.getText(self, "Add Class", "New class name:")
+        if ok and text.strip():
+            CLASSES.append(text.strip())
+            self._sync_classes_file()
+            self._refresh_class_list_ui()
+
+    def edit_class(self):
+        row = self.class_list.currentRow()
+        if row < 0 or row >= len(CLASSES): return
+        
+        old_name = CLASSES[row]
+        text, ok = QInputDialog.getText(self, "Edit Class", "Ext. Class name:", text=old_name)
+        if ok and text.strip() and text.strip() != old_name:
+            CLASSES[row] = text.strip()
+            self._sync_classes_file()
+            self._refresh_class_list_ui()
+            
+            # update drawn boxes text
+            for box in self.canvas.boxes:
+                if box.cls_id == row:
+                    box.text_item.setPlainText(text.strip())
+
+    def delete_class(self):
+        row = self.class_list.currentRow()
+        if row < 0 or row >= len(CLASSES): return
+        
+        cls_name = CLASSES[row]
+        reply = QMessageBox.question(self, "Confirm Delete", 
+                                     f"Are you sure you want to delete class '{cls_name}' (ID: {row})?\n"
+                                     "This will permanently shift subsequent class IDs and delete all boxes of this class!",
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+                                     
+        if reply == QMessageBox.StandardButton.Yes:
+            # 1. Remove from global list and update classes.txt
+            del CLASSES[row]
+            self._sync_classes_file()
+            self._refresh_class_list_ui()
+            
+            # 2. Iterate and update all saved .txt labels in dataset_manual
+            lbl_dir = os.path.join(self.dataset_manual, "labels")
+            if os.path.exists(lbl_dir):
+                for txt_file in os.listdir(lbl_dir):
+                    if not txt_file.endswith('.txt'): continue
+                    txt_path = os.path.join(lbl_dir, txt_file)
+                    try:
+                        with open(txt_path, 'r') as f:
+                            lines = f.readlines()
+                            
+                        new_lines = []
+                        for line in lines:
+                            parts = line.strip().split()
+                            if not parts: continue
+                            cls_id = int(parts[0])
+                            
+                            if cls_id == row:
+                                # This is the deleted class -> drop that line completely
+                                continue
+                            elif cls_id > row:
+                                # This class index is shifted down by 1
+                                parts[0] = str(cls_id - 1)
+                                
+                            new_lines.append(" ".join(parts))
+                            
+                        with open(txt_path, 'w') as f:
+                            f.write("\n".join(new_lines))
+                    except Exception as e:
+                        print(f"Failed processing {txt_file}: {e}")
+                        
+            # 3. Update current canvas active drawn boxes
+            boxes_to_remove = []
+            for box in self.canvas.boxes:
+                if box.cls_id == row:
+                    boxes_to_remove.append(box)
+                elif box.cls_id > row:
+                    # Shift ID down by 1 in live session
+                    box.cls_id -= 1
+                    
+            # Remove marked
+            for b_rem in boxes_to_remove:
+                self.canvas.scene.removeItem(b_rem)
+                if b_rem in self.canvas.boxes:
+                    self.canvas.boxes.remove(b_rem)
+                    
+            self.update_box_list()
+            # If current active file isn't automatically saved: we'll call save anyway.
+            self.save_current_labels()
 
     def get_selected_class(self):
         return self.class_list.currentRow()
@@ -807,6 +961,13 @@ class TrafficYoloApp(QMainWindow):
         fl.setSpacing(15)
         
         self.src_dataset_in = QLineEdit(os.path.abspath("dataset_manual"))
+        btn_src_dir = QPushButton("Browse")
+        btn_src_dir.setStyleSheet("font-size: 11pt; padding: 5px;")
+        btn_src_dir.clicked.connect(lambda: self.browse_dir(self.src_dataset_in, "Select Source Dataset Folder"))
+        h_src = QHBoxLayout()
+        h_src.addWidget(self.src_dataset_in)
+        h_src.addWidget(btn_src_dir)
+        
         self.train_ratio = QDoubleSpinBox()
         self.train_ratio.setRange(0.1, 0.9)
         self.train_ratio.setValue(0.8)
@@ -815,7 +976,7 @@ class TrafficYoloApp(QMainWindow):
         self.btn_split = QPushButton("Generate Train/Val Split & traffic.yaml")
         self.btn_split.clicked.connect(self.split_dataset)
         
-        fl.addRow("Source Directory:", self.src_dataset_in)
+        fl.addRow("Source Directory:", h_src)
         fl.addRow("Train Ratio (e.g. 0.8 = 80%):", self.train_ratio)
         fl.addRow(self.btn_split)
         
@@ -898,7 +1059,20 @@ names:
         fl.setSpacing(15)
         
         self.t_yaml = QLineEdit(os.path.abspath("dataset/traffic.yaml"))
+        btn_t_yaml = QPushButton("Browse")
+        btn_t_yaml.setStyleSheet("font-size: 11pt; padding: 5px;")
+        btn_t_yaml.clicked.connect(lambda: self.browse_file(self.t_yaml, "Select traffic.yaml", "*.yaml"))
+        h_yaml = QHBoxLayout()
+        h_yaml.addWidget(self.t_yaml)
+        h_yaml.addWidget(btn_t_yaml)
+        
         self.t_model = QLineEdit("../yolov26n.pt")
+        btn_t_model = QPushButton("Browse")
+        btn_t_model.setStyleSheet("font-size: 11pt; padding: 5px;")
+        btn_t_model.clicked.connect(lambda: self.browse_file(self.t_model, "Select Model .pt", "*.pt"))
+        h_t_model = QHBoxLayout()
+        h_t_model.addWidget(self.t_model)
+        h_t_model.addWidget(btn_t_model)
         
         self.t_epochs = QSpinBox()
         self.t_epochs.setRange(1, 1000)
@@ -916,8 +1090,8 @@ names:
         self.btn_train = QPushButton("Start YOLO Training")
         self.btn_train.clicked.connect(self.start_training)
         
-        fl.addRow("Traffic YAML Path:", self.t_yaml)
-        fl.addRow("Base Model (.pt):", self.t_model)
+        fl.addRow("Traffic YAML Path:", h_yaml)
+        fl.addRow("Base Model (.pt):", h_t_model)
         fl.addRow("Epochs:", self.t_epochs)
         fl.addRow("Batch Size:", self.t_batch)
         fl.addRow("Image Size:", self.t_imgsz)
