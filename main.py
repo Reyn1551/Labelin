@@ -50,10 +50,10 @@ class CaptureThread(QThread):
     log = pyqtSignal(str)
     finished = pyqtSignal(bool, str)
 
-    def __init__(self, url, num_frames, frame_skip, output_dir):
+    def __init__(self, url, sb_num_frames, frame_skip, output_dir):
         super().__init__()
         self.url = url
-        self.num_frames = num_frames
+        self.sb_num_frames = sb_num_frames
         self.frame_skip = frame_skip
         self.output_dir = output_dir
 
@@ -70,7 +70,7 @@ class CaptureThread(QThread):
         saved = 0
         self.log.emit("Starting capture...")
         
-        while saved < self.num_frames:
+        while saved < self.sb_num_frames.value():
             ret, frame = cap.read()
             if not ret:
                 time.sleep(0.1)
@@ -81,8 +81,8 @@ class CaptureThread(QThread):
                 filename = f"{self.output_dir}/frame_{saved:04d}.jpg"
                 cv2.imwrite(filename, frame)
                 saved += 1
-                self.progress.emit(saved, self.num_frames)
-                self.log.emit(f"Saved frame {saved}/{self.num_frames}")
+                self.progress.emit(saved, self.sb_num_frames.value())
+                self.log.emit(f"Saved frame {saved}/{self.sb_num_frames.value()}")
                 
         cap.release()
         self.finished.emit(True, f"Done! Saved {saved} frames to '{self.output_dir}'")
@@ -511,7 +511,7 @@ class TrafficYoloApp(QMainWindow):
         self.cap_prog.setValue(0)
         self.cap_thread = CaptureThread(
             self.stream_url_in.text(), 
-            self.num_frames_in.value(), 
+            self.num_frames_in, 
             self.frame_skip_in.value(),
             "dataset_raw"
         )
@@ -645,6 +645,16 @@ class TrafficYoloApp(QMainWindow):
         os.makedirs(f"{self.dataset_manual}/images", exist_ok=True)
         os.makedirs(f"{self.dataset_manual}/labels", exist_ok=True)
         
+        # Additional step to copy auto-labeled results as default manual labels upon load to enable editing
+        if is_labeled:
+            for img_name in os.listdir(img_dir):
+                if img_name.endswith(('.jpg', '.png')):
+                    lbl_name = img_name.replace('.jpg', '.txt').replace('.png', '.txt')
+                    auto_lbl_src = os.path.join(os.path.dirname(img_dir), "labels", lbl_name)
+                    man_tgt = os.path.join(self.dataset_manual, "labels", lbl_name)
+                    if os.path.exists(auto_lbl_src) and not os.path.exists(man_tgt):
+                        shutil.copy(auto_lbl_src, man_tgt)
+                        
         self.load_current_image()
 
     def load_current_image(self):
@@ -760,6 +770,13 @@ class TrafficYoloApp(QMainWindow):
             self.delete_selected_box()
         elif event.key() == Qt.Key.Key_W:
             self.canvas.drawing = True 
+            
+        # Class Selection via Number Keys (0-9)
+        elif Qt.Key.Key_0 <= event.key() <= Qt.Key.Key_9:
+            num = event.key() - Qt.Key.Key_0
+            if num < len(CLASSES):
+                self.class_list.setCurrentRow(num)
+                
         super().keyPressEvent(event)
 
 

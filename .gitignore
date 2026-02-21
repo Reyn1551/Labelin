@@ -1,0 +1,22 @@
+# Python & Bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Application Data & Generated Datasets
+dataset_raw/
+dataset_labeled/
+dataset_manual/
+dataset/
+traffic.yaml
+
+# Ultralytics & Training Outputs
+runs/
+*.pt
+
+# OS / IDE Files
+.DS_Store
+.idea/
+.vscode/
+*.swp
