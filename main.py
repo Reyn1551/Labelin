@@ -168,13 +168,14 @@ class TrainThread(QThread):
     log = pyqtSignal(str)
     finished = pyqtSignal(bool, str)
 
-    def __init__(self, yaml_path, epochs, batch, imgsz, model_path):
+    def __init__(self, yaml_path, model_path, epochs, batch, imgsz, workers):
         super().__init__()
         self.yaml_path = yaml_path
+        self.model_path = model_path
         self.epochs = epochs
         self.batch = batch
         self.imgsz = imgsz
-        self.model_path = model_path
+        self.workers = workers
 
     def run(self):
         try:
@@ -191,7 +192,9 @@ class TrainThread(QThread):
                 project='runs',
                 name='yolo_traffic_gui',
                 exist_ok=True,
-                device=0 if os.system("nvidia-smi > /dev/null 2>&1") == 0 else 'cpu'
+                device=0,         # Force GPU 0
+                workers=self.workers, # Reduces RAM to VRAM overhead
+                amp=False         # Disable mixed precision to prevent NaN losses on GTX 16xx series
             )
             self.finished.emit(True, f"Training complete! Best model at runs/yolo_traffic_gui/weights/best.pt")
         except Exception as e:
@@ -858,7 +861,10 @@ class TrafficYoloApp(QMainWindow):
             return
 
         img_path = self.current_images[self.current_img_idx]
-        self.lbl_img_info.setText(f"{os.path.basename(img_path)} ({self.current_img_idx+1}/{len(self.current_images)})")
+        
+        # Strip any existing [SAVED] from base string just in case
+        base_name = os.path.basename(img_path)
+        self.lbl_img_info.setText(f"{base_name} ({self.current_img_idx+1}/{len(self.current_images)})")
         
         self.canvas.load_image(img_path)
         
@@ -939,14 +945,18 @@ class TrafficYoloApp(QMainWindow):
             f.write("\n".join(lines))
         
         # Visual feedback
-        self.lbl_img_info.setText(self.lbl_img_info.text() + " [SAVED]")
+        curr_text = self.lbl_img_info.text()
+        if not curr_text.endswith(" [SAVED]"):
+            self.lbl_img_info.setText(curr_text + " [SAVED]")
 
     def next_image(self):
+        if not self.current_images: return
         if self.current_img_idx < len(self.current_images) - 1:
             self.current_img_idx += 1
             self.load_current_image()
 
     def prev_image(self):
+        if not self.current_images: return
         if self.current_img_idx > 0:
             self.current_img_idx -= 1
             self.load_current_image()
@@ -960,7 +970,7 @@ class TrafficYoloApp(QMainWindow):
             self.next_image()
         elif event.key() == Qt.Key.Key_S:
             self.save_current_labels()
-        elif event.key() == Qt.Key.Key_Delete or event.key() == Qt.Key.Key_Backspace:
+        elif event.key() in [Qt.Key.Key_Delete, Qt.Key.Key_Backspace, Qt.Key.Key_Space]:
             self.delete_selected_box()
         elif event.key() == Qt.Key.Key_W:
             self.canvas.drawing = True 
@@ -1103,7 +1113,11 @@ names:
         
         self.t_batch = QSpinBox()
         self.t_batch.setRange(1, 128)
-        self.t_batch.setValue(16)
+        self.t_batch.setValue(4)  # Default lowered to 4 for 4GB GPUs
+        
+        self.t_workers = QSpinBox()
+        self.t_workers.setRange(0, 32)
+        self.t_workers.setValue(0) # 0 to save RAM/VRAM mapping overhead
         
         self.t_imgsz = QSpinBox()
         self.t_imgsz.setRange(320, 1280)
@@ -1117,6 +1131,7 @@ names:
         fl.addRow("Base Model (.pt):", h_t_model)
         fl.addRow("Epochs:", self.t_epochs)
         fl.addRow("Batch Size:", self.t_batch)
+        fl.addRow("Workers (CPU):", self.t_workers)
         fl.addRow("Image Size:", self.t_imgsz)
         fl.addRow(self.btn_train)
         grp.setLayout(fl)
@@ -1151,10 +1166,11 @@ names:
         
         self.train_thread = TrainThread(
             yaml_path,
+            self.t_model.text() if os.path.exists(self.t_model.text()) else "yolo11n.pt",
             self.t_epochs.value(),
             self.t_batch.value(),
             self.t_imgsz.value(),
-            self.t_model.text() if os.path.exists(self.t_model.text()) else "yolo11n.pt" 
+            self.t_workers.value()
         )
         self.train_thread.log.connect(lambda t: self.s4_log.append(t))
         self.train_thread.finished.connect(self.on_train_finished)
