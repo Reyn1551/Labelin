@@ -50,20 +50,32 @@ class CaptureThread(QThread):
     log = pyqtSignal(str)
     finished = pyqtSignal(bool, str)
 
-    def __init__(self, url, sb_num_frames, frame_skip, output_dir):
+    def __init__(self, sources, sb_num_frames, frame_skip, output_dir):
         super().__init__()
-        self.url = url
+        self.sources = sources
         self.sb_num_frames = sb_num_frames
         self.frame_skip = frame_skip
         self.output_dir = output_dir
 
     def run(self):
         os.makedirs(self.output_dir, exist_ok=True)
-        self.log.emit(f"Connecting to stream: {self.url}...")
-        cap = cv2.VideoCapture(self.url)
         
-        if not cap.isOpened():
-            self.finished.emit(False, "Failed to open video stream.")
+        caps = []
+        for src in self.sources:
+            try:
+                # Int cast for webcams if pure digit
+                src_val = int(src) if src.isdigit() else src
+                self.log.emit(f"Connecting to stream: {src_val}...")
+                cap = cv2.VideoCapture(src_val)
+                if cap.isOpened():
+                    caps.append((src_val, cap))
+                else:
+                    self.log.emit(f"Failed to open stream: {src_val}")
+            except Exception as e:
+                self.log.emit(f"Error opening {src}: {e}")
+                
+        if not caps:
+            self.finished.emit(False, "Failed to open any video streams.")
             return
 
         # Find highest frame number currently in the output directory
@@ -85,22 +97,31 @@ class CaptureThread(QThread):
         saved = 0
         self.log.emit(f"Starting capture from frame_{start_idx:04d}.jpg...")
         
-        while saved < self.sb_num_frames.value():
-            ret, frame = cap.read()
-            if not ret:
-                time.sleep(0.1)
-                continue
-            
-            count += 1
-            if count % self.frame_skip == 0:
-                current_frame_id = start_idx + saved
-                filename = f"{self.output_dir}/frame_{current_frame_id:04d}.jpg"
-                cv2.imwrite(filename, frame)
-                saved += 1
-                self.progress.emit(saved, self.sb_num_frames.value())
-                self.log.emit(f"Saved frame {current_frame_id:04d} ({saved}/{self.sb_num_frames.value()})")
+        while saved < self.sb_num_frames.value() and caps:
+            active_caps = []
+            for src_name, cap in caps:
+                ret, frame = cap.read()
+                if ret:
+                    active_caps.append((src_name, cap))
+                    count += 1
+                    if count % self.frame_skip == 0:
+                        current_frame_id = start_idx + saved
+                        filename = f"{self.output_dir}/frame_{current_frame_id:04d}.jpg"
+                        cv2.imwrite(filename, frame)
+                        saved += 1
+                        self.progress.emit(saved, self.sb_num_frames.value())
+                        self.log.emit(f"Saved frame {current_frame_id:04d} from {src_name} ({saved}/{self.sb_num_frames.value()})")
+                        
+                        if saved >= self.sb_num_frames.value():
+                            break
+                else:
+                    self.log.emit(f"Stream ended/disconnected: {src_name}")
+                    cap.release()
+            caps = active_caps
                 
-        cap.release()
+        for _, cap in caps:
+            cap.release()
+            
         self.finished.emit(True, f"Done! Saved {saved} frames to '{self.output_dir}'")
 
 class AutoLabelThread(QThread):
@@ -481,7 +502,32 @@ class TrafficYoloApp(QMainWindow):
         grp1 = QGroupBox("Capture Streams")
         l1 = QFormLayout()
         l1.setSpacing(15)
-        self.stream_url_in = QLineEdit("http://cctvjss.jogjakota.go.id/atcs/ATCS_Lampu_Merah_SugengJeroni2.stream/playlist.m3u8")
+        
+        self.source_list = QListWidget()
+        self.source_list.setFixedHeight(120)
+        self.source_list.addItem("http://cctvjss.jogjakota.go.id/atcs/ATCS_Lampu_Merah_SugengJeroni2.stream/playlist.m3u8")
+        
+        btn_add_url = QPushButton("+ Add URL")
+        btn_add_url.setStyleSheet("font-size: 11pt; padding: 5px;")
+        btn_add_url.clicked.connect(self.add_stream_url)
+        
+        btn_add_vid = QPushButton("+ Add Video")
+        btn_add_vid.setStyleSheet("font-size: 11pt; padding: 5px;")
+        btn_add_vid.clicked.connect(self.add_stream_video)
+        
+        btn_del_src = QPushButton("- Remove")
+        btn_del_src.setStyleSheet("font-size: 11pt; padding: 5px; background-color: #f38ba8; color: #11111b;")
+        btn_del_src.clicked.connect(self.remove_stream_source)
+        
+        h_src_btns = QHBoxLayout()
+        h_src_btns.addWidget(btn_add_url)
+        h_src_btns.addWidget(btn_add_vid)
+        h_src_btns.addWidget(btn_del_src)
+        
+        v_src = QVBoxLayout()
+        v_src.addWidget(self.source_list)
+        v_src.addLayout(h_src_btns)
+        
         self.num_frames_in = QSpinBox()
         self.num_frames_in.setRange(10, 5000)
         self.num_frames_in.setValue(100)
@@ -495,7 +541,7 @@ class TrafficYoloApp(QMainWindow):
         
         self.cap_prog = QProgressBar()
         
-        l1.addRow("M3U8 / RTSP URL:", self.stream_url_in)
+        l1.addRow("Video Sources:", v_src)
         l1.addRow("Frames to Capture:", self.num_frames_in)
         l1.addRow("Capture Every N Frames:", self.frame_skip_in)
         l1.addRow(self.btn_capture)
@@ -537,14 +583,34 @@ class TrafficYoloApp(QMainWindow):
         
         return w
 
+    def add_stream_url(self):
+        url, ok = QInputDialog.getText(self, "Add Stream URL", "Enter RTSP/HTTP or Webcam ID (e.g. 0):")
+        if ok and url.strip():
+            self.source_list.addItem(url.strip())
+            
+    def add_stream_video(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Select Video", "", "Video Files (*.mp4 *.avi *.mkv)", options=QFileDialog.Option.DontUseNativeDialog)
+        if path:
+            self.source_list.addItem(path)
+            
+    def remove_stream_source(self):
+        row = self.source_list.currentRow()
+        if row >= 0:
+            self.source_list.takeItem(row)
+
     def log_s1(self, msg):
         self.s1_log.append(msg)
 
     def start_capture(self):
+        sources = [self.source_list.item(i).text() for i in range(self.source_list.count())]
+        if not sources:
+            QMessageBox.warning(self, "Error", "Please add at least one video source.")
+            return
+            
         self.btn_capture.setEnabled(False)
         self.cap_prog.setValue(0)
         self.cap_thread = CaptureThread(
-            self.stream_url_in.text(), 
+            sources, 
             self.num_frames_in, 
             self.frame_skip_in.value(),
             "dataset_raw"
