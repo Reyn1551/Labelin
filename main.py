@@ -93,27 +93,28 @@ class CaptureThread(QThread):
             if indices:
                 start_idx = max(indices) + 1
                 
-        count = 0
+        counts = {id(cap): 0 for _, cap in caps}
         saved = 0
         self.log.emit(f"Starting capture from frame_{start_idx:04d}.jpg...")
         
         while saved < self.sb_num_frames.value() and caps:
             active_caps = []
             for src_name, cap in caps:
+                if saved >= self.sb_num_frames.value():
+                    active_caps.append((src_name, cap))
+                    continue
+                    
                 ret, frame = cap.read()
                 if ret:
                     active_caps.append((src_name, cap))
-                    count += 1
-                    if count % self.frame_skip == 0:
+                    counts[id(cap)] += 1
+                    if counts[id(cap)] % self.frame_skip == 0:
                         current_frame_id = start_idx + saved
                         filename = f"{self.output_dir}/frame_{current_frame_id:04d}.jpg"
                         cv2.imwrite(filename, frame)
                         saved += 1
                         self.progress.emit(saved, self.sb_num_frames.value())
                         self.log.emit(f"Saved frame {current_frame_id:04d} from {src_name} ({saved}/{self.sb_num_frames.value()})")
-                        
-                        if saved >= self.sb_num_frames.value():
-                            break
                 else:
                     self.log.emit(f"Stream ended/disconnected: {src_name}")
                     cap.release()
