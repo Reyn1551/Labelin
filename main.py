@@ -153,6 +153,14 @@ class AutoLabelThread(QThread):
                 return
                 
             for idx, img_name in enumerate(images):
+                label_name = img_name.replace('.jpg', '.txt').replace('.png', '.txt')
+                manual_label_path = os.path.join("dataset_manual", "labels", label_name)
+                
+                if os.path.exists(manual_label_path) and os.path.getsize(manual_label_path) > 0:
+                    self.log.emit(f"Skipping {img_name} (Already labeled)")
+                    self.progress.emit(idx + 1, total)
+                    continue
+                    
                 img_path = os.path.join(self.image_dir, img_name)
                 frame = cv2.imread(img_path)
                 
