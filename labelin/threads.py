@@ -7,6 +7,7 @@ from PyQt6.QtCore import QThread, pyqtSignal
 
 class CaptureThread(QThread):
     progress = pyqtSignal(int, int)
+    frameSaved = pyqtSignal(str)
     log = pyqtSignal(str)
     finished = pyqtSignal(bool, str)
 
@@ -16,6 +17,10 @@ class CaptureThread(QThread):
         self.sb_num_frames = sb_num_frames
         self.frame_skip = frame_skip
         self.output_dir = output_dir
+        self._cancel = False
+
+    def requestCancel(self):
+        self._cancel = True
 
     def run(self):
         os.makedirs(self.output_dir, exist_ok=True)
@@ -58,6 +63,12 @@ class CaptureThread(QThread):
         self.log.emit(f"Starting capture from frame_{start_idx:04d}.jpg...")
         
         while saved < self.sb_num_frames.value() and caps:
+            if self._cancel:
+                for _, cap in caps:
+                    cap.release()
+                self.finished.emit(False, "Capture cancelled.")
+                return
+
             active_caps = []
             for src_name, cap in caps:
                 if saved >= self.sb_num_frames.value():
@@ -74,6 +85,7 @@ class CaptureThread(QThread):
                         cv2.imwrite(filename, frame)
                         saved += 1
                         self.progress.emit(saved, self.sb_num_frames.value())
+                        self.frameSaved.emit(filename)
                         self.log.emit(f"Saved frame {current_frame_id:04d} from {src_name} ({saved}/{self.sb_num_frames.value()})")
                 else:
                     self.log.emit(f"Stream ended/disconnected: {src_name}")
@@ -96,6 +108,10 @@ class AutoLabelThread(QThread):
         self.model_path = model_path
         self.image_dir = image_dir
         self.output_dir = output_dir
+        self._cancel = False
+
+    def requestCancel(self):
+        self._cancel = True
 
     def run(self):
         try:
@@ -114,6 +130,9 @@ class AutoLabelThread(QThread):
                 return
                 
             for idx, img_name in enumerate(images):
+                if self._cancel:
+                    self.finished.emit(False, "Auto-label cancelled.")
+                    return
                 label_name = img_name.replace('.jpg', '.txt').replace('.png', '.txt')
                 manual_label_path = os.path.join("dataset_manual", "labels", label_name)
                 
@@ -191,3 +210,38 @@ class TrainThread(QThread):
             self.finished.emit(True, f"Training complete! Best model at runs/yolo_traffic_gui/weights/best.pt")
         except Exception as e:
             self.finished.emit(False, f"Training failed: {str(e)}")
+
+
+class StreamTestThread(QThread):
+    previewFrame = pyqtSignal(object)
+    status = pyqtSignal(str)
+    failed = pyqtSignal(str)
+    stopped = pyqtSignal()
+
+    def __init__(self, source):
+        super().__init__()
+        self.source = source
+        self._stop = False
+
+    def requestStop(self):
+        self._stop = True
+
+    def run(self):
+        src_val = int(self.source) if self.source.isdigit() else self.source
+        cap = cv2.VideoCapture(src_val)
+        if not cap.isOpened():
+            self.failed.emit(f"Cannot open source: {self.source}")
+            return
+        self.status.emit(f"Stream OK: {self.source}. Preview berjalan, klik 'Stop Test' untuk berhenti.")
+        frame_count = 0
+        while not self._stop:
+            ret, frame = cap.read()
+            if not ret:
+                self.status.emit("Stream ended or no more frames.")
+                break
+            frame_count += 1
+            if frame_count % 4 == 0:
+                self.previewFrame.emit(frame)
+            time.sleep(0.05)
+        cap.release()
+        self.stopped.emit()

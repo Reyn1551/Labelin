@@ -1,0 +1,168 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --bg-main: #0B0E17;
+  --bg-sidebar: #0F1322;
+  --bg-card: #151B2E;
+  --bg-card-hover: #1E263E;
+  --bg-input: #121726;
+  
+  --border-color: #232D46;
+  --border-glow: rgba(99, 102, 241, 0.35);
+
+  --accent-primary: #6366F1;
+  --accent-primary-hover: #4F46E5;
+  --accent-purple: #8B5CF6;
+  --accent-pink: #EC4899;
+  --accent-cyan: #06B6D4;
+  --accent-success: #10B981;
+  --accent-warning: #F59E0B;
+  --accent-danger: #EF4444;
+
+  --text-main: #F1F5F9;
+  --text-muted: #94A3B8;
+  --text-subtle: #64748B;
+
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-main);
+}
+::-webkit-scrollbar-thumb {
+  background: #232D46;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-primary);
+}
+
+/* Glassmorphism Card */
+.rf-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
+  transition: all 0.2s ease-in-out;
+}
+
+.rf-card:hover {
+  border-color: rgba(99, 102, 241, 0.4);
+}
+
+.rf-card-glow {
+  box-shadow: 0 0 25px -5px rgba(99, 102, 241, 0.15);
+}
+
+/* Button Component */
+.rf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 0.875rem;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+  font-family: var(--font-sans);
+}
+
+.rf-btn-primary {
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-purple));
+  color: #FFFFFF;
+  box-shadow: 0 0 15px rgba(99, 102, 241, 0.3);
+}
+
+.rf-btn-primary:hover {
+  opacity: 0.92;
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.5);
+  transform: translateY(-1px);
+}
+
+.rf-btn-secondary {
+  background: var(--bg-card);
+  border-color: var(--border-color);
+  color: var(--text-main);
+}
+
+.rf-btn-secondary:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--accent-primary);
+}
+
+.rf-btn-danger {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #FCA5A5;
+}
+
+.rf-btn-danger:hover {
+  background: rgba(239, 68, 68, 0.3);
+}
+
+/* Input Fields */
+.rf-input {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-main);
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 0.2s;
+  font-family: var(--font-sans);
+}
+
+.rf-input:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+/* Terminal Log View */
+.rf-terminal {
+  background: #07090F;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.825rem;
+  color: #38BDF8;
+  padding: 12px;
+  overflow-y: auto;
+  line-height: 1.6;
+}
+
+/* Badge */
+.rf-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}

@@ -5,7 +5,8 @@
 PyQt6>=6.4.0
 
 # Image & video I/O, processing
-opencv-python>=4.8.0
+# Headless: avoid bundled-Qt conflict with PyQt6 (xcb plugin errors)
+opencv-python-headless>=4.8.0
 
 # YOLO detection & training (optional but recommended for full workflow)
 ultralytics>=8.0.0
